@@ -1,6 +1,42 @@
 local _G = _G or getfenv()
 
 -- ============================================================================
+-- Neutralize the built-in EverlookBroadcastingCo addon
+-- ============================================================================
+-- The original is loaded as part of FrameXML (before user addons), so its
+-- XML frames (EBCMain, EBCFrame, EBC_Minimap) already exist and its Lua
+-- globals (EBC_CreateFrame, ShowEBCMinimapDropdown, etc.) are already defined.
+-- We must hide the original frames and replace its functions IMMEDIATELY
+-- (at file-load time) so the original's VARIABLES_LOADED handler is harmless.
+
+-- Save a reference to the original minimap button before we overwrite the global
+local EBC_OrigMinimapButton = EBC_Minimap
+
+-- Kill the original's frame-creation function so its VARIABLES_LOADED does nothing
+EBC_CreateFrame = function() end
+
+-- Hide the original XML frames
+if EBCMain then
+	EBCMain:Hide()
+	EBCMain:UnregisterAllEvents()
+end
+if EBCFrame then
+	EBCFrame:Hide()
+end
+if EBC_OrigMinimapButton then
+	EBC_OrigMinimapButton:Hide()
+	EBC_OrigMinimapButton:EnableMouse(false)
+	EBC_OrigMinimapButton:SetScript("OnEnter", nil)
+	EBC_OrigMinimapButton:SetScript("OnLeave", nil)
+	EBC_OrigMinimapButton:SetScript("OnMouseUp", nil)
+	EBC_OrigMinimapButton:SetScript("OnDragStart", nil)
+	EBC_OrigMinimapButton:SetScript("OnDragStop", nil)
+	EBC_OrigMinimapButton:ClearAllPoints()
+	EBC_OrigMinimapButton:SetParent(UIParent)
+	EBC_OrigMinimapButton:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -200, 200)
+end
+
+-- ============================================================================
 -- SavedVariables defaults
 -- ============================================================================
 
@@ -39,11 +75,11 @@ local function EBC_UpdateMinimapButtonPosition(button, angle)
 end
 
 -- ============================================================================
--- Minimap button
+-- Minimap button (new name to avoid collision with the original)
 -- ============================================================================
 
 local function EBC_CreateMinimapButton()
-	local btn = CreateFrame("Button", "EBC_Minimap", Minimap)
+	local btn = CreateFrame("Button", "BetterEBC_MinimapButton", Minimap)
 	btn:SetWidth(33)
 	btn:SetHeight(33)
 	btn:SetFrameStrata("MEDIUM")
@@ -121,24 +157,24 @@ local function EBC_CreateMinimapButton()
 end
 
 -- ============================================================================
--- Radio window toggle
+-- Radio window toggle (overrides the original global)
 -- ============================================================================
 
 function ShowEBCMinimapDropdown()
-	if EBCMinimapDropdown:IsVisible() then
-		EBCMinimapDropdown:Hide()
-	else
-		EBCMinimapDropdown:Show()
+	if BetterEBC_Dropdown and BetterEBC_Dropdown:IsVisible() then
+		BetterEBC_Dropdown:Hide()
+	elseif BetterEBC_Dropdown then
+		BetterEBC_Dropdown:Show()
 	end
 end
 
 -- ============================================================================
--- Tune in / out
+-- Tune in / out (overrides the original global)
 -- ============================================================================
 
 function EBC_TuneIn(station)
-	local s1 = EBCMinimapDropdown.CheckButton1:GetChecked() or false
-	local s2 = EBCMinimapDropdown.CheckButton2:GetChecked() or false
+	local s1 = BetterEBC_Dropdown.CheckButton1:GetChecked() or false
+	local s2 = BetterEBC_Dropdown.CheckButton2:GetChecked() or false
 
 	if not s1 and not s2 then
 		EBC_Alert(EBC_STOPPED .. EBC_TITLE .. EBC_FORNOW)
@@ -147,7 +183,7 @@ function EBC_TuneIn(station)
 		return
 	end
 
-	EBCMinimapDropdown.MuteButton:SetBackdrop({bgFile = "Interface\\Buttons\\UI-GuildButton-MOTD-Up"})
+	BetterEBC_Dropdown.MuteButton:SetBackdrop({bgFile = "Interface\\Buttons\\UI-GuildButton-MOTD-Up"})
 	SetCVar("EnableMusic", 1)
 	SendChatMessage(".radio " .. station, "SAY", nil)
 	EBC_Alert(EBC_TUNEDINTO .. _G["EBC_STATION" .. station] .. "!")
@@ -166,27 +202,27 @@ end
 local function EBC_RestoreState()
 	local sel = BetterEBC_Settings.selectedStation
 	if sel == 1 then
-		EBCMinimapDropdown.CheckButton1:SetChecked(1)
-		EBCMinimapDropdown.CheckButton2:SetChecked(0)
+		BetterEBC_Dropdown.CheckButton1:SetChecked(1)
+		BetterEBC_Dropdown.CheckButton2:SetChecked(0)
 	elseif sel == 2 then
-		EBCMinimapDropdown.CheckButton1:SetChecked(0)
-		EBCMinimapDropdown.CheckButton2:SetChecked(1)
+		BetterEBC_Dropdown.CheckButton1:SetChecked(0)
+		BetterEBC_Dropdown.CheckButton2:SetChecked(1)
 	else
-		EBCMinimapDropdown.CheckButton1:SetChecked(0)
-		EBCMinimapDropdown.CheckButton2:SetChecked(0)
+		BetterEBC_Dropdown.CheckButton1:SetChecked(0)
+		BetterEBC_Dropdown.CheckButton2:SetChecked(0)
 	end
 
 	if BetterEBC_Settings.dropdownOpen then
-		EBCMinimapDropdown:Show()
+		BetterEBC_Dropdown:Show()
 	end
 end
 
 -- ============================================================================
--- Create the radio window
+-- Create the radio window (all new frame names to avoid collisions)
 -- ============================================================================
 
-local function EBC_CreateFrame()
-	local dd = CreateFrame("Frame", "EBCMinimapDropdown", UIParent)
+local function EBC_CreateRadioWindow()
+	local dd = CreateFrame("Frame", "BetterEBC_Dropdown", UIParent)
 	dd:SetFrameStrata("DIALOG")
 	dd:SetWidth(230)
 	dd:SetHeight(145)
@@ -202,7 +238,7 @@ local function EBC_CreateFrame()
 	dd:Hide()
 
 	-- Escape to close
-	table.insert(UISpecialFrames, "EBCMinimapDropdown")
+	table.insert(UISpecialFrames, "BetterEBC_Dropdown")
 
 	-- Save open/closed state
 	dd:SetScript("OnShow", function()
@@ -247,7 +283,7 @@ local function EBC_CreateFrame()
 	sep:SetVertexColor(0.6, 0.6, 0.6, 0.8)
 
 	-- Close button
-	local closeBtn = CreateFrame("Button", "EBCMinimapDropdownCloseButton", dd, "UIPanelCloseButton")
+	local closeBtn = CreateFrame("Button", nil, dd, "UIPanelCloseButton")
 	closeBtn:SetPoint("TOPRIGHT", dd, "TOPRIGHT", -2, -2)
 	closeBtn:SetScript("OnClick", function()
 		dd:Hide()
@@ -258,7 +294,7 @@ local function EBC_CreateFrame()
 	-- ========================================================================
 
 	-- Station 1
-	dd.CheckButton1 = CreateFrame("CheckButton", "EBCMinimapDropdownCheckButton1", dd, "UICheckButtonTemplate")
+	dd.CheckButton1 = CreateFrame("CheckButton", "BetterEBC_Check1", dd, "UICheckButtonTemplate")
 	dd.CheckButton1:SetPoint("TOPLEFT", dd, "TOPLEFT", 12, -36)
 	dd.CheckButton1:SetWidth(24)
 	dd.CheckButton1:SetHeight(24)
@@ -287,7 +323,7 @@ local function EBC_CreateFrame()
 	label1:SetPoint("LEFT", dd.CheckButton1, "RIGHT", 2, 0)
 
 	-- Station 2
-	dd.CheckButton2 = CreateFrame("CheckButton", "EBCMinimapDropdownCheckButton2", dd, "UICheckButtonTemplate")
+	dd.CheckButton2 = CreateFrame("CheckButton", "BetterEBC_Check2", dd, "UICheckButtonTemplate")
 	dd.CheckButton2:SetPoint("TOPLEFT", dd.CheckButton1, "BOTTOMLEFT", 0, -4)
 	dd.CheckButton2:SetWidth(24)
 	dd.CheckButton2:SetHeight(24)
@@ -326,7 +362,7 @@ local function EBC_CreateFrame()
 	volLabel:SetPoint("BOTTOMLEFT", dd, "BOTTOMLEFT", 12, 18)
 
 	-- Slider
-	dd.slider = CreateFrame("Slider", "EBCMinimapDropdownSlider", dd, "OptionsSliderTemplate")
+	dd.slider = CreateFrame("Slider", "BetterEBC_Slider", dd, "OptionsSliderTemplate")
 	dd.slider:SetPoint("LEFT", volLabel, "RIGHT", 8, 0)
 	dd.slider:SetWidth(100)
 	dd.slider:SetHeight(16)
@@ -368,7 +404,7 @@ local function EBC_CreateFrame()
 	end)
 
 	-- Mute button
-	dd.MuteButton = CreateFrame("Frame", "EBCMinimapDropdownMuteButton", dd)
+	dd.MuteButton = CreateFrame("Frame", nil, dd)
 	dd.MuteButton:SetWidth(18)
 	dd.MuteButton:SetHeight(18)
 	dd.MuteButton:SetPoint("LEFT", dd.VolText, "RIGHT", 6, 0)
@@ -413,7 +449,7 @@ local function EBC_CreateFrame()
 		dd:SetPoint("CENTER", UIParent, "BOTTOMLEFT",
 			BetterEBC_Settings.dropdownX, BetterEBC_Settings.dropdownY)
 	else
-		dd:SetPoint("TOPRIGHT", EBC_Minimap, "BOTTOMLEFT", 10, 10)
+		dd:SetPoint("TOPRIGHT", BetterEBC_MinimapButton, "BOTTOMLEFT", 10, 10)
 	end
 
 	return dd
@@ -430,6 +466,41 @@ SlashCmdList["EBC"] = function()
 end
 
 -- ============================================================================
+-- Also kill any original dropdown that might get created despite our override.
+-- The original's VARIABLES_LOADED handler references a local `EBC_Frame`, so
+-- even though we nuked the global EBC_CreateFrame, the local event handler in
+-- the built-in's Lua closure might still call the OLD function through its
+-- local reference.  Belt-and-suspenders: hide it after everything loads.
+-- ============================================================================
+
+local function EBC_NukeOriginalDropdown()
+	-- If the original somehow created an EBCMinimapDropdown, hide it
+	local origDD = getglobal("EBCMinimapDropdown")
+	if origDD and origDD ~= BetterEBC_Dropdown then
+		origDD:Hide()
+		origDD:EnableMouse(false)
+		origDD:ClearAllPoints()
+		origDD:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -500, 500)
+		origDD:SetScript("OnShow", function() this:Hide() end)
+	end
+
+	-- Double-check the original minimap button is still dead
+	local origBtn = EBC_OrigMinimapButton
+	if origBtn then
+		origBtn:Hide()
+	end
+	-- Also check the global in case something recreated it
+	local globalBtn = getglobal("EBC_Minimap")
+	if globalBtn and globalBtn ~= BetterEBC_MinimapButton then
+		globalBtn:Hide()
+		globalBtn:EnableMouse(false)
+		globalBtn:ClearAllPoints()
+		globalBtn:SetParent(UIParent)
+		globalBtn:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -200, 200)
+	end
+end
+
+-- ============================================================================
 -- Event handler — bootstrap everything
 -- ============================================================================
 
@@ -442,8 +513,10 @@ EBC_EventFrame:SetScript("OnEvent", function()
 		StopMusic()
 		EBC_InitSavedVars()
 		EBC_CreateMinimapButton()
-		EBC_CreateFrame()
+		EBC_CreateRadioWindow()
 		EBC_RestoreState()
+		-- Delayed cleanup: nuke anything the original managed to create
+		EBC_NukeOriginalDropdown()
 	elseif event == "PLAYER_LOGOUT" then
 		-- dropdownOpen is already tracked via OnShow/OnHide, nothing extra needed
 	end
